@@ -29,12 +29,13 @@ class QrCodeController extends Controller
         // Generate QR code
         $qrCode = $this->qrCodeService->generateQrCode($request->all(), $color, $backgroundColor, $qrcodeData);
 
+        $subtitle = $request->input('subtitle', 'SCAN ME');
         if ($request->input('type') === 'png') {
-            $encodedImage = $this->qrCodeService->processPng($qrCode, $colorKey);
+            $encodedImage = $this->qrCodeService->processPng($qrCode, $colorKey, $subtitle, $backgroundColorKey);
             return response($encodedImage)->header('Content-Type', 'image/png');
         }
 
-        $subtitle = $request->input('subtitle', 'SCAN ME');
+
         $finalSvg = $this->qrCodeService->generateSvg($qrCode, $subtitle, $colorKey, $backgroundColorKey);
 
         return response($finalSvg)->header('Content-Type', 'image/svg+xml');
