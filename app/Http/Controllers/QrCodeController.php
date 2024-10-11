@@ -5,10 +5,8 @@ namespace App\Http\Controllers;
 use Intervention\Image\ImageManager;
 use Intervention\Image\Drivers\Gd\Driver;
 use Illuminate\Http\Request;
-use Intervention\Image\Geometry\Factories\CircleFactory;
 use SimpleSoftwareIO\QrCode\Facades\QrCode;
 
-// Ensure this is imported
 
 class QrCodeController extends Controller
 {
@@ -18,26 +16,34 @@ class QrCodeController extends Controller
             'text' => 'nullable|string',
             'email' => 'nullable|string|email',
             'geo' => 'nullable|array',
-            'geo.latitude' => 'required_with:geo|numeric|between:-90,90', // Latitude should be a valid number between -90 and 90
-            'geo.longitude' => 'required_with:geo|numeric|between:-180,180', // Longitude should be a valid number between -180 and 180
+            'geo.latitude' => 'required_with:geo|numeric|between:-90,90',
+            'geo.longitude' => 'required_with:geo|numeric|between:-180,180',
             'phone_number' => 'nullable|string',
             'wifi' => 'nullable|array',
-            'wifi.encryption' => 'required_with:wifi|string|in:WPA,WEP,none', // Restrict the encryption types to valid values
+            'wifi.encryption' => 'required_with:wifi|string|in:WPA,WEP,none',
             'wifi.ssid' => 'required_with:wifi|string',
-            'wifi.password' => 'nullable|string', // Password can be nullable if not required
-            'wifi.hidden' => 'nullable|boolean',  // Hidden should be true/false
+            'wifi.password' => 'nullable|string',
+            'wifi.hidden' => 'nullable|boolean',
             'color' => 'nullable|string',
             'type' => 'required|string|in:svg,png',
-            'subtitle' => 'nullable|string'
+            'subtitle' => 'nullable|string',
+            'style' => 'nullable|string|in:square,dot,round',
+            'eye' => 'nullable|string|in:square,circle',
         ]);
 
-        $colorKey = $request->input('color', 'black'); // Default color to black
-        $backgroundColorKey = $request->input('background_color', 'white'); // Default background color to white
-        $type = $request->input('type', 'svg'); // Default type is SVG
-        $subtitle = $request->input('subtitle', 'SCAN ME'); // Default subtitle
+        $colorKey = $request->input('color', 'black');
+        $backgroundColorKey = $request->input('background_color', 'white');
+        $type = $request->input('type', 'svg');
+        $style = $request->input('style', 'round');
+        $eye = $request->input('eye', 'square');
 
+        //GET COLOR AND BACKGROUND COLOR FROM THE RGB CODE
         $color = $this->rgbColor($colorKey);
         $backgroundColor = $this->rgbColor($backgroundColorKey);
+
+        //TODO: ADD SUBTITLE TO THE IMAGE/SVG GENERATED
+        $subtitle = $request->input('subtitle', 'SCAN ME');
+
 
         if ($request->filled('wifi')) {
             $wifi = $request->input('wifi');
@@ -55,7 +61,10 @@ class QrCodeController extends Controller
             $qrcodeData = $request->input('text');
         }
 
+
         $qrCode = QrCode::size(300)
+            ->style($style)
+            ->eye($eye)
             ->color(...$color)
             ->margin(2)
             ->errorCorrection('M')
@@ -67,23 +76,30 @@ class QrCodeController extends Controller
         //JUST FOR PNG
         if ($type === 'png') {
             $base64QrCode = base64_encode($qrCode);
-            $manager = new ImageManager(new Driver()); // Specify the driver
+            $manager = new ImageManager(new Driver());
             $qrImage = $manager->read($base64QrCode);
-
-            // Create a rounded background with the same dimensions
-            $background = $manager->create(600, 600)->fill('fff'); // White background
-            $background->drawCircle(20, 20, null);
-
-            // Overlay the QR code on the rounded background
+            $background = $manager->create(600, 600)->fill('fff');
             $background->place($qrImage, 'center');
-
             $encodedImage = $background->encodeByMediaType('image/png');
-
             // Return the final image with correct headers
             return response($encodedImage)->header('Content-Type', 'image/png');
         }
         //FOR SVG
-        return response($qrCode)->header('Content-Type', 'image/svg+xml');
+        $qrCodeSvg = trim($qrCode);
+        $qrCodeSvg = str_replace('<?xml version="1.0" encoding="UTF-8"?>', '', $qrCodeSvg);
+
+        $finalSvg = <<<SVG
+<svg xmlns="http://www.w3.org/2000/svg" width="300" height="350">
+<rect width="300" height="400" fill="$backgroundColorKey" />
+    <g>
+        $qrCodeSvg
+        <text x="150" y="340" font-size="30" text-anchor="middle" fill="$colorKey">$subtitle</text>
+    </g>
+</svg>
+SVG;
+
+        // Return the complete SVG
+        return response($finalSvg)->header('Content-Type', 'image/svg+xml');
     }
 
     private function rgbColor($color)
