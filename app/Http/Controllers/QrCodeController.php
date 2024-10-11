@@ -57,6 +57,7 @@ class QrCodeController extends Controller
         } elseif ($request->filled('text')) {
             return $request->input('text');
         }
+        return null;
     }
 
     private function rgbColor($color): array
